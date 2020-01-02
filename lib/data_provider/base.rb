@@ -59,11 +59,11 @@ module DataProvider
       end
 
       def take(id, opts = {})
-        dpc.take(id, opts.merge(:scope => self))
+        dpc.take(id, opts.merge!(:scope => self))
       end
 
       def try_take(id, opts = {})
-        dpc.try_take(id, opts.merge(:scope => self))
+        dpc.try_take(id, opts.merge!(:scope => self))
       end
 
       def got?(*args)
@@ -147,7 +147,7 @@ module DataProvider
 
       def add_scoped! _module, options = {}
         if _module.is_a?(DataProvider::Container)
-          dpc.add_scoped!(_module, options) 
+          dpc.add_scoped!(_module, options)
         else
           dpc.add_scoped! _module.dpc, options
         end
@@ -234,20 +234,20 @@ module DataProvider
             include _module
           end
         end
-        
+
         return self
       end
 
       def add_scoped! _module, options = {}
         if _module.is_a?(DataProvider::Container)
-          dpc.add_scoped!(_module, options) 
+          dpc.add_scoped!(_module, options)
         else
           dpc.add_scoped! _module.dpc, options
           self.class.class_eval do
             include _module
           end
         end
-        
+
         return self
       end
     end # module InstanceMethods

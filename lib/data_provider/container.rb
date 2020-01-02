@@ -165,7 +165,7 @@ module DataProvider
     # take_super is only meant to be called form inside a provider
     # returns the result of next provider with the same ID
     def take_super(opts = {})
-      take(provider_id, opts.merge(:skip => current_skip + 1))
+      take(provider_id, opts.merge!(:skip => current_skip + 1))
     end
 
     #
@@ -334,7 +334,8 @@ module DataProvider
       # if the array is empty, args will always turn out nil
       args = matching_provider_args[opts[:skip].to_i]
 
-      return args.nil? ? nil : Provider.new(*args)
+      @providers_cache[key] = args.nil? ? nil : Provider.new(*args)
+      @providers_cache[key]
     end
   end # class Container
 end # module DataProvider
