@@ -13,12 +13,13 @@ module DataProvider
     end
   end
 
-
   class Container
     attr_reader :options
 
     def initialize _opts = {}
       @options = _opts.is_a?(Hash) ? _opts : {}
+      @providers_cache = {}
+      @providers_index = {}
     end
 
     def logger
@@ -66,13 +67,13 @@ module DataProvider
     end
 
     def force_build_node?(*args)
-      scope = args.is_a?(Array) ? args.flatten : [args]
+      scope = args.is_a?(Array) ? args.flatten! : [args]
       provider = get_provider(scope)
       provider && provider.force_build_node?
     end
 
     def provider_identifiers
-      (provides.keys + providers.map(&:first)).compact.uniq
+      @provider_identifiers ||= (provides.keys + providers.map(&:first)).compact.uniq
     end
 
     # provides, when called with a hash param, will define 'simple providers' (providers
@@ -85,7 +86,8 @@ module DataProvider
     end
 
     def providers
-      @providers || []
+      # only flatten one level deep
+      @providers_index.values.flatten!(1) || []
     end
 
     def provider_missing &block
@@ -104,19 +106,21 @@ module DataProvider
 
     def take(id, opts = {})
       logger.debug "DataProvider::Container#take with id: #{id.inspect}"
+      skip = opts[:skip]
+      scope_from_opts = opts[:scope]
 
       # first try the simple providers
-      if provides.has_key?(id) && opts[:skip].nil?
+      if provides.has_key?(id) && skip.nil?
         provider = provides[id]
         return provider.is_a?(Proc) ? provider.call : provider
       end
 
       # try to get a provider object
-      provider = get_provider(id, :skip => opts[:skip])
+      provider = get_provider(id, :skip => skip)
       if provider
         @stack = (@stack || []) + [provider]
-        @skip_stack = (@skip_stack || []) + [opts[:skip].to_i]
-        result = (opts[:scope] || self).instance_eval(&provider.block) 
+        @skip_stack = (@skip_stack || []) + [skip.to_i]
+        result = (scope_from_opts || self).instance_eval(&provider.block)
         @skip_stack.pop
         @stack.pop
         # execute provider object's block within the scope of self
@@ -126,11 +130,11 @@ module DataProvider
       # try to get a scoped provider object
       if scope.length > 0
         scoped_id = [scope, id].flatten
-        provider = get_provider(scoped_id, :skip => opts[:skip])
+        provider = get_provider(scoped_id, :skip => skip)
         if provider
           @stack = (@stack || []) + [provider]
-          @skip_stack = (@skip_stack || []) + [opts[:skip].to_i]
-          result = (opts[:scope] || self).instance_eval(&provider.block) 
+          @skip_stack = (@skip_stack || []) + [skip.to_i]
+          result = (scope_from_opts || self).instance_eval(&provider.block)
           @skip_stack.pop
           @stack.pop
           # execute provider object's block within the scope of self
@@ -153,7 +157,7 @@ module DataProvider
       end
 
       # no fallback either? Time for an error
-      raise ProviderMissingException.new(:provider_id => id) 
+      raise ProviderMissingException.new(:provider_id => id)
     end
 
     def try_take(id, opts = {})
@@ -193,7 +197,7 @@ module DataProvider
     end
 
     def add(container)
-      # make a copy and add the container to that 
+      # make a copy and add the container to that
       give({}).add!(container)
     end
 
@@ -305,8 +309,11 @@ module DataProvider
   private
 
     def add_provider(identifier, opts = {}, block = nil)
-      @providers ||= []
-      @providers.unshift [identifier, opts, block]
+      if !@providers_index[identifier]
+        @providers_index[identifier] = []
+      end
+
+      @providers_index[identifier].unshift([identifier, opts, block])
     end
 
     def add_provides _provides = {}
@@ -321,8 +328,14 @@ module DataProvider
 
     # returns the requested provider as a Provider object
     def get_provider(id, opts = {})
+      local_cache_key = "#{id}#{opts}"
+
+      if @providers_cache[local_cache_key]
+        return @providers_cache[local_cache_key]
+      end
+
       # get all matching providers
-      matching_provider_args = providers.find_all{|args| args.first == id}
+      matching_provider_args = @providers_index[id] || []
       # sort providers on priority, form high to low
       matching_provider_args.sort! do |args_a, args_b|
         # we want to sort from high priority to low, but providers with the same priority level
@@ -334,8 +347,8 @@ module DataProvider
       # if the array is empty, args will always turn out nil
       args = matching_provider_args[opts[:skip].to_i]
 
-      @providers_cache[key] = args.nil? ? nil : Provider.new(*args)
-      @providers_cache[key]
+      @providers_cache[local_cache_key] = args.nil? ? nil : Provider.new(*args)
+      @providers_cache[local_cache_key]
     end
   end # class Container
 end # module DataProvider
