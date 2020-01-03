@@ -19,7 +19,6 @@ module DataProvider
     def initialize _opts = {}
       @options = _opts.is_a?(Hash) ? _opts : {}
       @providers_cache = {}
-      @providers_index = {}
     end
 
     def logger
@@ -86,8 +85,7 @@ module DataProvider
     end
 
     def providers
-      # only flatten one level deep
-      @providers_index.values.flatten!(1) || []
+      return @providers || []
     end
 
     def provider_missing &block
@@ -309,11 +307,8 @@ module DataProvider
   private
 
     def add_provider(identifier, opts = {}, block = nil)
-      if !@providers_index[identifier]
-        @providers_index[identifier] = []
-      end
-
-      @providers_index[identifier].unshift([identifier, opts, block])
+      @providers ||= []
+      @providers.unshift [identifier, opts, block]
     end
 
     def add_provides _provides = {}
@@ -335,7 +330,7 @@ module DataProvider
       end
 
       # get all matching providers
-      matching_provider_args = @providers_index[id] || []
+      matching_provider_args = providers.find_all{|args| args.first == id}
       # sort providers on priority, form high to low
       matching_provider_args.sort! do |args_a, args_b|
         # we want to sort from high priority to low, but providers with the same priority level
